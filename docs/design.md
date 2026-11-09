@@ -1,8 +1,7 @@
 # Technical Design Document
 
-**Project:** Self-Hosted Developer Platform (30-Day MVP)  
-**Status:** Planning / Draft  
-**Last Updated:** 2026-11-09
+**Project:** Self-Hosted Developer Platform
+**Status:** Planning / Draft
 
 ---
 
@@ -372,7 +371,6 @@ The project is complete when:
 - [ ] This design document is complete and accurate
 - [ ] Core runbooks exist and have been tested
 - [ ] Architecture diagrams are finished
-- [ ] Demo video is recorded
 
 At that point the project shifts from “building infrastructure” to “demonstrating engineering capability.”
 
