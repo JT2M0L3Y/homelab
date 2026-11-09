@@ -21,17 +21,6 @@
 
 Build a self-hosted developer platform on Proxmox that provides a production-like environment for developing, deploying, monitoring, and operating software projects.
 
-The platform serves two purposes:
-
-1. Enable rapid development of future personal projects.
-2. Demonstrate platform engineering, infrastructure, and software delivery skills to employers.
-
-### Narrative
-
-Instead of “I built a homelab,” the goal is to demonstrate:
-
-> “I designed and operated a secure self-hosted developer platform that supports application development, deployment, observability, secrets management, and remote administration.”
-
 ### Primary Application
 
 The workload that proves the platform is the portfolio website currently living at [https://jonathansmoley.com](https://jonathansmoley.com) (static site on a Cloudflare Worker).
