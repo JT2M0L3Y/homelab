@@ -23,7 +23,7 @@ Build a self-hosted developer platform on Proxmox that provides a production-lik
 
 ### Primary Application
 
-The workload that proves the platform is the portfolio website currently living at [https://jonathansmoley.com](https://jonathansmoley.com) (static site on a Cloudflare Worker).
+The workload that proves the platform is the portfolio website.
 
 **Migration goal:** move it onto the self-hosted platform so it can become dynamic, use the platform’s PostgreSQL instance, and expose or consume additional APIs beyond a networked database.
 
