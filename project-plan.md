@@ -1,4 +1,4 @@
-# Self-Hosted Developer Platform (30-Day MVP)
+# Self-Hosted Developer Platform
 
 ## Project Overview
 
@@ -6,24 +6,9 @@
 
 Build a self-hosted developer platform on Proxmox that provides a production-like environment for developing, deploying, monitoring, and operating software projects.
 
-The platform serves two purposes:
-
-1. Enable rapid development of future personal projects.
-2. Demonstrate platform engineering, infrastructure, and software delivery skills to employers.
-
-### Project Narrative
-
-Instead of:
-
-> "I built a homelab."
-
-The goal is to demonstrate:
-
-> "I designed and operated a secure self-hosted developer platform that supports application development, deployment, observability, secrets management, and remote administration."
-
 ### Primary Application
 
-The workload that proves the platform is the portfolio website at [https://jonathansmoley.com](https://jonathansmoley.com).
+The workload that proves the platform is the portfolio website.
 
 - **Current state:** Static site served by a Cloudflare Worker.
 - **Target state:** Self-hosted, dynamic application that uses the platform’s PostgreSQL instance and can call additional internal/external APIs.
@@ -34,7 +19,7 @@ The platform itself remains the primary project; the portfolio site is the concr
 
 ## Success Criteria
 
-At the end of 30 days, I should be able to demonstrate:
+I should be able to demonstrate:
 
 - Secure remote access (Tailscale, no public SSH)
 - Centralized secrets management (OpenBao)
@@ -74,7 +59,7 @@ Tailscale
   --------
   Caddy
   PostgreSQL
-  Portfolio Website (jonathansmoley.com)
+  Portfolio Website
 
   VM: dev
   -------
@@ -145,7 +130,7 @@ db.internal
 
 **Responsibilities:** HTTPS termination, reverse proxying, automatic TLS.
 
-**Primary public service:** `jonathansmoley.com` (and any required subdomains).
+**Primary public service:** portfolio website (and any required subdomains).
 
 ---
 
@@ -258,7 +243,7 @@ Health check / Restart Service
 
 ---
 
-## 30-Day Schedule
+## Schedule
 
 ### Week 1: Foundation
 
@@ -374,9 +359,6 @@ Create under `docs/runbooks/`:
 - [ ] Add New Application
 - [ ] Portfolio cut-over / rollback
 
-#### Demo Video
-**Length:** 5–10 minutes
-
 **Suggested flow:**
 1. Architecture overview
 2. OpenBao secrets
@@ -406,20 +388,7 @@ The following are postponed until Version 2:
 - Microservice architecture beyond the single portfolio application
 - Self-hosted GitHub runner as the primary deploy path
 
-**Reason:** The objective is a shippable, demonstrable project within 30 days.
-
----
-
-## Resume Outcomes
-
-**Resume Bullet #1**  
-Designed and operated a self-hosted developer platform on Proxmox supporting secure remote access, secrets management (OpenBao), automated deployments, centralized logging, metrics collection, and HTTPS service delivery.
-
-**Resume Bullet #2**  
-Built CI/CD pipelines using GitHub Actions that deployed a containerized portfolio application to a production-like environment utilizing Tailscale, OpenBao, Caddy, PostgreSQL, Grafana, Prometheus, and Loki.
-
-**Resume Bullet #3**  
-Implemented observability and operational tooling including centralized logging, infrastructure monitoring, backup strategies, deployment runbooks, and service recovery procedures.
+**Reason:** The objective is a shippable, demonstrable project on a tight schedule.
 
 ---
 
@@ -437,7 +406,6 @@ The project is considered complete when:
 - [ ] Portfolio website is reachable, functional, and using PostgreSQL
 - [ ] Documentation is finished (`docs/design.md` + runbooks + diagrams)
 - [ ] Architecture diagrams are completed
-- [ ] Demo video is recorded
 
 At that point the project shifts from “building infrastructure” to “demonstrating engineering capability.”
 
@@ -448,5 +416,3 @@ At that point the project shifts from “building infrastructure” to “demons
 - `docs/design.md` — Technical Design Document (source of truth for architecture decisions)
 - `docs/architecture/` — Mermaid diagrams
 - `docs/runbooks/` — Operational procedures (to be populated)
-- `docs/decisions/` — Architecture Decision Records (to be populated)
-- `docs/demo/` — Demo video script
