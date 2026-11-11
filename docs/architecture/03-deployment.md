@@ -10,51 +10,57 @@ flowchart LR
     subgraph Pipeline["GitHub Actions Workflow"]
         Lint[Lint]
         Test[Test]
-        Build[Build Container]
-        Push[Push / Load Image]
-        Deploy[Deploy via SSH over Tailscale]
-        Verify[Health Check]
+        Build[Build Docker image]
+        Connect[Authenticate to NetBird]
+        Provision[Provision / select Proxmox project VM]
+        Deploy[Deploy application]
+        Verify[Health check]
     end
 
-    GHA --> Lint --> Test --> Build --> Push --> Deploy --> Verify
-    Deploy -->|SSH over Tailscale| Apps[apps VM]
+    GHA --> Lint --> Test --> Build --> Connect --> Provision --> Deploy --> Verify
+    Connect -->|Private network| NB[NetBird hosted network]
+    NB --> Host[Debian / Proxmox Host]
+    Provision -->|Scoped API| PVE[Proxmox API]
+    Deploy -->|SSH / deployment mechanism| VM[Project VM]
 ```
 
-## Detailed Deployment Sequence (SSH-over-Tailscale – MVP path)
+## Portfolio Deployment Sequence
 
 ```mermaid
 sequenceDiagram
     participant Dev as Developer
     participant GH as GitHub
     participant GHA as GitHub Actions
-    participant TS as Tailscale
-    participant Apps as apps VM
-    participant Caddy as Caddy
-    participant App as Portfolio Website Container
+    participant NB as NetBird hosted network
+    participant Host as Debian / Proxmox Host
+    participant PVE as Proxmox
+    participant VM as Portfolio project VM
+    participant Caddy as Host Caddy
+    participant App as Portfolio Docker workload
 
     Dev->>GH: git push
     GH->>GHA: Trigger workflow
-    GHA->>GHA: Lint + Test
-    GHA->>GHA: Build image
-    GHA->>TS: Authenticate / connect
-    GHA->>Apps: SSH + docker pull/load + restart
-    Apps->>App: New container starts
-    App->>Caddy: Ready (or Caddy routes to new container)
-    GHA->>Apps: Health check
+    GHA->>GHA: Lint, test, build image
+    GHA->>NB: Authenticate as authorized peer
+    GHA->>Host: Connect over private network
+    GHA->>PVE: Provision/select project VM (scoped API)
+    GHA->>VM: Deploy Docker workload over private route
+    VM->>App: Start updated workload
+    App->>Caddy: Ready for internal proxy traffic
+    GHA->>VM: Health check
     GHA-->>GH: Workflow success / failure
-```
-
-## Alternative: Self-Hosted Runner (Future / Optional)
-
-```mermaid
-flowchart TB
-    GH[GitHub] -->|Job assigned| Runner[Self-hosted Runner<br/>on platform or apps VM]
-    Runner -->|Local docker / compose| App[Portfolio Website]
 ```
 
 ## Notes
 
-- **MVP decision:** GitHub-hosted runners + SSH over Tailscale.
-- Secrets required by the pipeline (deploy keys, registry creds, etc.) should come from GitHub Secrets or, better, be fetched via OpenBao where practical.
-- Rollback = redeploy previous known-good image tag + documented procedure in runbooks.
-- The portfolio site migration from the current Cloudflare Worker will have its own cut-over and rollback plan.
+- Core services are Docker containers on the Debian host OS; project workloads
+  run in Proxmox-managed environments.
+- Use VMs for Docker-based project workloads rather than nesting Docker inside
+  LXCs.
+- GitHub Actions uses NetBird for private connectivity and narrowly scoped
+  Proxmox/deployment credentials.
+- Proxmox provides quick provisioning for projects, development, and tests;
+  persistent project data must be backed up separately from disposable
+  environments.
+- The portfolio cut-over from its Cloudflare Worker has a separate rollback
+  procedure.

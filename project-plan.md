@@ -4,16 +4,19 @@
 
 ### Objective
 
-Build a self-hosted developer platform on Proxmox that provides a production-like environment for developing, deploying, monitoring, and operating software projects.
+Build a self-hosted developer platform on a Debian/Proxmox host that provides
+core services and a quick, disposable environment for developing, testing, and
+running projects.
 
 ### Primary Application
 
-The workload that proves the platform is the portfolio website.
+The portfolio website proves the platform end-to-end.
 
 - **Current state:** Static site served by a Cloudflare Worker.
-- **Target state:** Self-hosted, dynamic application that uses the platform’s PostgreSQL instance and can call additional internal/external APIs.
-
-The platform itself remains the primary project; the portfolio site is the concrete proof that the platform works end-to-end.
+- **Target state:** Dynamic application backed by the platform PostgreSQL
+  service and published through Cloudflare Tunnel and Caddy.
+- **Placement:** A Proxmox-managed project environment, separate from the
+  host-level core services.
 
 ---
 
@@ -21,58 +24,53 @@ The platform itself remains the primary project; the portfolio site is the concr
 
 I should be able to demonstrate:
 
-- Secure remote access (Tailscale, no public SSH)
-- Centralized secrets management (OpenBao)
-- Internal DNS (AdGuard Home)
-- Reverse proxy with HTTPS (Caddy)
-- Containerized deployment of the portfolio website
-- CI/CD automation (GitHub Actions → SSH over Tailscale)
+- Secure remote access using NetBird, with no public SSH
+- Core services running as Docker containers on the Debian host OS
+- Internal DNS through AdGuard Home
+- Internal routing and HTTPS termination through Caddy
+- Public access through Cloudflare Tunnel
+- Proxmox environments that can be quickly created for projects, development,
+  and testing
+- A Docker-based portfolio deployment in a Proxmox project environment
+- CI/CD automation over NetBird and the Proxmox API/management path
 - Metrics collection (Prometheus)
 - Centralized logging (Loki)
 - Documentation and operational runbooks
 
 ---
 
-## Final Architecture
+## Target Architecture
 
 ```text
-Internet
-    |
-Cloudflare DNS
-    |
-    V
-Tailscale
-    |
-+-----------------------+
-|   Proxmox Host        |
-+-----------------------+
+Local LAN (vmbr0) ── Debian / Proxmox host (`<LAN_HOST_IP>/<LAN_PREFIX>`)
+                       ├── Host-level Docker core services
+                       │   ├── AdGuard Home
+                       │   ├── OpenBao
+                       │   ├── Caddy
+                       │   ├── PostgreSQL
+                       │   ├── Prometheus
+                       │   ├── Grafana
+                       │   ├── Loki
+                       │   └── Cloudflare Tunnel
+                       ├── NetBird peer / subnet router
+                       └── Proxmox
+                           └── vmbr1 project subnet
+                               ├── Portfolio project environment
+                               ├── Development environments
+                               └── Short-lived test environments
 
-  VM: platform-core
-  ----------------
-  OpenBao
-  Grafana
-  Prometheus
-  Loki
-  AdGuard Home
+NetBird hosted management coordinates authorized peers; the Debian host
+advertises the project subnet for private routing. AdGuard handles internal
+DNS; Caddy handles internal routing and public HTTPS ingress from Cloudflare
+Tunnel.
 
-  VM: apps
-  --------
-  Caddy
-  PostgreSQL
-  Portfolio Website
-
-  VM: dev
-  -------
-  Developer Workstation
-
-GitHub
-   |
-   V
-GitHub Actions
-   |
-   V
-Deploy via SSH over Tailscale → apps VM
+GitHub Actions ── NetBird ── Debian/Proxmox host and project environments
 ```
+
+Core service containers run directly on the Debian host OS, not inside
+Proxmox-managed guests. Proxmox remains the fast provisioning layer for
+isolated project workloads. Docker is the initial container runtime; project
+Docker workloads should run in Proxmox VMs rather than nesting Docker in LXCs.
 
 Detailed diagrams and the full technical design live in `docs/`.
 
@@ -82,38 +80,57 @@ Detailed diagrams and the full technical design live in `docs/`.
 
 ### Infrastructure
 
-#### Proxmox
+#### Debian / Proxmox
 
-**Responsibilities:** Virtualization, VM management, snapshot management, backup management.
+**Responsibilities:** Run core Docker services on the host OS and provide
+Proxmox-managed environments for projects, development, and testing.
 
 **Deliverables:**
-- Stable Proxmox installation
-- VM templates
-- Backup schedule
-- Snapshot strategy
+- Stable Debian/Proxmox host
+- Dedicated `vmbr1` project subnet, isolated from the local LAN
+- Host `nftables` policy and outbound NAT for project environments
+- Reusable Proxmox templates and documented quick-provisioning workflow
+- Proxmox backups for project environments
+- Protected backups for host Docker configuration, persistent volumes, and data
 
----
+#### Docker on the Debian host
+
+Run the platform/core services as Docker containers on the host OS:
+
+- AdGuard Home
+- OpenBao
+- Caddy
+- PostgreSQL
+- Prometheus
+- Grafana
+- Loki
+- Cloudflare Tunnel
+
+Use persistent storage and a documented startup/backup procedure. These
+containers are separate from Proxmox guests.
 
 ### Remote Access
 
-#### Tailscale
+#### NetBird Community Edition
 
-**Responsibilities:** Remote administration, secure networking, private access.
+**Responsibilities:** Private remote administration and access to the project
+subnet.
 
 **Requirements:**
-- Installed on every VM (and preferably the host)
-- SSH access via Tailscale only
-- No public SSH exposure
-
----
+- Use NetBird-hosted management/control plane
+- Install the NetBird peer on the Debian host
+- Advertise the `vmbr1` project subnet through the host
+- Authorize remote peers and restrict routes/access with NetBird policies
+- SSH and management access remain private; no public SSH
 
 ### Internal DNS
 
 #### AdGuard Home
 
-**Responsibilities:** Internal DNS, service discovery, optional DNS filtering.
+**Responsibilities:** Internal DNS and service discovery for host services
+and project environments.
 
-**Example records:**
+Example records:
 ```text
 openbao.internal
 grafana.internal
@@ -122,60 +139,56 @@ app.internal / www.internal
 db.internal
 ```
 
----
+Local LAN clients may query AdGuard Home only on TCP/UDP port 53. Other
+local-LAN-initiated access to host services and the project subnet is blocked.
 
-### Reverse Proxy
+### Reverse Proxy and Public Access
 
 #### Caddy
 
-**Responsibilities:** HTTPS termination, reverse proxying, automatic TLS.
+**Responsibilities:** Internal reverse proxy/routing and HTTPS termination.
+Public traffic arrives through Cloudflare Tunnel; no public host ports are
+opened.
 
-**Primary public service:** portfolio website (and any required subdomains).
+#### Cloudflare Tunnel
 
----
+Runs as a Docker container on the Debian host and forwards public requests to
+Caddy. Caddy routes to the portfolio application in its Proxmox project
+environment.
 
 ### Secrets Management
 
 #### OpenBao
 
-**Responsibilities:** Secret storage, credential management, secure application configuration.
+**Responsibilities:** Secret storage, credential management, and secure
+application configuration. OpenBao is Vault-compatible and open source.
 
-OpenBao is Vault-compatible (same API/CLI surface) while remaining fully open-source (MPL-2.0) under Linux Foundation governance.
-
-**Examples of secrets:**
-```text
-github-token
-cloudflare-token
-database-password
-deploy keys / registry credentials
-```
-
-**Demonstration:** Portfolio application retrieves secrets from OpenBao at runtime.
-
----
+Examples include database credentials, Cloudflare credentials, and deployment
+credentials. The portfolio application retrieves its secrets from OpenBao at
+runtime.
 
 ### Database
 
 #### PostgreSQL
 
-**Responsibilities:** Persistent storage for the portfolio website.
+**Responsibilities:** Persistent storage for the portfolio and other projects.
 
 **Requirements:**
-- Dedicated database instance on the `apps` VM
-- Backup strategy documented and tested
-
----
+- One PostgreSQL Docker service on the Debian host
+- Multiple databases, schemas, and roles as needed
+- `pg_dump` backups and a documented restore procedure
 
 ### Observability
 
 #### Prometheus
-- Metrics collection (CPU, memory, network, disk, container, and application metrics)
+- Host, Docker service, Proxmox guest, and application metrics
 
 #### Grafana
-- Dashboards: Infrastructure Health, VM Metrics, Application Metrics (portfolio site)
+- Infrastructure, project environment, and portfolio dashboards
 
 #### Loki
-- Centralized logging of application and infrastructure logs
+- Centralized logs from host services, Docker workloads, and project
+  environments
 
 ---
 
@@ -183,63 +196,34 @@ deploy keys / registry credentials
 
 ### Portfolio Website
 
-**Purpose:** Prove the platform works end-to-end while giving a real personal asset a production-like home.
-
 **Migration path:**
-1. Keep current Cloudflare Worker live during development.
-2. Build and containerize the dynamic version on the platform.
-3. Cut over DNS / traffic once the self-hosted version is stable.
-4. Document rollback procedure.
-
-**Capabilities enabled by the platform:**
-- Dynamic content backed by PostgreSQL
-- Ability to call additional internal or external APIs
-- Secure secret injection via OpenBao
-- Automated deployment and observability
-
-### Non-Goals (for the application)
-
-Avoid turning the portfolio site into a large product during the 30-day window:
-- Heavy authentication systems
-- Multi-tenancy
-- Complex SPA frameworks beyond what is needed
-- AI features
-
-Keep the application scope tight so the platform remains the focus.
+1. Keep the Cloudflare Worker live during development.
+2. Create a Proxmox project environment and deploy the dynamic application as
+   a Docker workload.
+3. Connect it to host PostgreSQL and OpenBao over the private network.
+4. Route public traffic from Cloudflare Tunnel through Caddy to the project
+   environment.
+5. Document cut-over and rollback.
 
 ---
 
 ## CI/CD Pipeline
 
-### Goal
-
-Automate deployments of the portfolio website to the platform.
-
 ### GitHub Actions Workflow
 
 ```text
-Push / PR
-    |
-Lint
-    |
-Test
-    |
-Build Container
-    |
-Deploy (SSH over Tailscale)
-    |
-Health check / Restart Service
+Push / PR → Lint → Test → Build Docker image
+         → Authenticate/connect over NetBird
+         → Deploy to the project environment
+         → Health check
 ```
 
-### Deployment Decision (MVP)
+**Primary path:** GitHub Actions joins the NetBird network and reaches the
+Proxmox host and authorized project subnet. Use the Proxmox API for environment
+lifecycle and SSH/appropriate deployment tooling for application rollout.
 
-**Primary path:** GitHub-hosted runners + SSH over Tailscale.
-
-**Rationale:** Fastest to implement, still demonstrates secure private deployment, no extra runner infrastructure to maintain during the 30-day window.
-
-**Future improvement:** Self-hosted GitHub runner on the platform.
-
-**Deployment target:** `apps` VM.
+**Development:** Use the local workstation over NetBird and spin up isolated
+Proxmox environments as needed.
 
 ---
 
@@ -247,172 +231,85 @@ Health check / Restart Service
 
 ### Week 1: Foundation
 
-**Goal:** Establish core infrastructure and network topology.
+- [ ] Install/configure Debian and Proxmox host
+- [ ] Configure `vmbr1`, project subnet, host firewall, and outbound NAT
+- [ ] Configure NetBird hosted management, host peer, subnet route, and access
+      policies
+- [ ] Configure host SSH (key-only, no public exposure)
+- [ ] Create reusable Proxmox project VM template(s)
+- [ ] Verify authorized remote access and local-LAN isolation
 
-#### Proxmox
-- [ ] Install/configure host
-- [ ] Create VM templates
-- [ ] Configure storage
-- [ ] Configure backups
-
-#### Create VMs
-- [ ] platform-core
-- [ ] apps
-- [ ] dev
-
-#### Tailscale
-- [ ] Install on all systems
-- [ ] Verify remote access
-- [ ] Configure SSH (key-only, no public exposure)
-
-#### DNS
-- [ ] Deploy AdGuard Home
-- [ ] Configure internal records (`openbao.internal`, etc.)
-
-**Week 1 Deliverable:** Working infrastructure and network topology.
-
----
+**Week 1 Deliverable:** Working host, private access, and quick project
+environment provisioning.
 
 ### Week 2: Core Platform Services
 
-**Goal:** Deploy foundational platform services.
+- [ ] Set up Docker on the Debian host OS
+- [ ] Deploy AdGuard Home and configure internal records
+- [ ] Deploy OpenBao and configure secret storage/recovery
+- [ ] Deploy PostgreSQL; configure multiple databases/roles and backups
+- [ ] Deploy Caddy for internal routes and HTTPS
+- [ ] Deploy Prometheus, Grafana, and Loki
+- [ ] Deploy Cloudflare Tunnel to Caddy; verify no public host ports
+- [ ] Configure persistent host data and backup/restore procedures
 
-#### OpenBao
-- [ ] Install
-- [ ] Configure secret storage
-- [ ] Create sample secrets
-- [ ] Verify application can retrieve secrets
-
-#### PostgreSQL
-- [ ] Install
-- [ ] Configure backups
-- [ ] Verify connectivity from apps VM
-
-#### Caddy
-- [ ] Configure HTTPS
-- [ ] Configure reverse proxy for the portfolio domain
-
-#### Prometheus
-- [ ] Install
-- [ ] Add node exporters on all VMs
-
-#### Grafana
-- [ ] Install
-- [ ] Create initial dashboards
-
-#### Loki
-- [ ] Install
-- [ ] Aggregate logs from platform services
-
-**Week 2 Deliverable:** Operational platform services.
-
----
+**Week 2 Deliverable:** Operational Docker-based core services.
 
 ### Week 3: Application and CI/CD
 
-**Goal:** Complete the software delivery workflow for the portfolio site.
+- [ ] Configure GitHub Actions workflow and NetBird access
+- [ ] Create a Proxmox project environment for the portfolio
+- [ ] Build and deploy the portfolio as a Docker workload
+- [ ] Connect to PostgreSQL and OpenBao
+- [ ] Route public traffic through Cloudflare Tunnel and Caddy
+- [ ] Add application metrics and logs
+- [ ] Document Cloudflare Worker cut-over and rollback
 
-#### GitHub Repository
-- [ ] Ensure repository is ready (or create if needed)
-- [ ] Configure GitHub Actions workflow
-
-#### Application
-- [ ] Evolve portfolio site toward dynamic version
-- [ ] Containerize application
-- [ ] Connect to PostgreSQL
-- [ ] Integrate OpenBao for secrets
-
-#### Deployment
-- [ ] Automate deployment via SSH over Tailscale
-- [ ] Verify updates land correctly
-- [ ] Document cut-over and rollback from Cloudflare Worker
-
-#### Monitoring
-- [ ] Add application metrics
-- [ ] Add application logging to Loki
-
-**Week 3 Deliverable:** Working portfolio website deployed through CI/CD.
-
----
+**Week 3 Deliverable:** Working portfolio deployment through the platform.
 
 ### Week 4: Documentation and Presentation
 
-**Goal:** Transform implementation into a polished portfolio project.
+- [ ] Finalize high-level, networking, deployment, and observability diagrams
+- [ ] Keep `docs/design.md` aligned with implementation decisions
+- [ ] Complete deploy, secrets, backup/restore, project-environment recovery,
+      application onboarding, and portfolio cut-over runbooks
+- [ ] Prepare the project demonstration
 
-#### Architecture Diagrams
-- [ ] High-level topology (already drafted in `docs/architecture/`)
-- [ ] Networking & traffic flows
-- [ ] Deployment flow
-- [ ] Observability data flow
-- [ ] Final polish / export as needed
-
-#### Technical Design Document
-- [x] `docs/design.md` created and aligned with current decisions
-- [ ] Keep updated as implementation decisions are finalized
-
-#### Runbooks
-Create under `docs/runbooks/`:
-- [ ] Deploy Service
-- [ ] Rotate Secrets
-- [ ] Restore Backup
-- [ ] Recover VM
-- [ ] Add New Application
-- [ ] Portfolio cut-over / rollback
-
-**Suggested flow:**
-1. Architecture overview
-2. OpenBao secrets
-3. Git push
-4. CI/CD pipeline
-5. Deployment over Tailscale
-6. Grafana dashboard
-7. Loki logs
-8. Live portfolio site (dynamic + DB)
-
-**Week 4 Deliverable:** Publicly presentable engineering portfolio project.
+**Week 4 Deliverable:** Publicly presentable engineering project.
 
 ---
 
 ## Explicitly Out of Scope (v2)
 
-The following are postponed until Version 2:
-
-- Kubernetes / Nomad
-- Consul / Service Mesh
-- ArgoCD
+- Kubernetes / Nomad / Consul / service mesh
 - Full Terraform / declarative IaC
-- OpenTelemetry distributed tracing
+- High availability or multi-node clusters
 - Distributed databases
-- Multi-node clusters / High Availability
-- AI agents
-- Microservice architecture beyond the single portfolio application
+- OpenTelemetry distributed tracing
 - Self-hosted GitHub runner as the primary deploy path
-
-**Reason:** The objective is a shippable, demonstrable project on a tight schedule.
 
 ---
 
 ## Definition of Done
 
-The project is considered complete when:
-
-- [ ] Infrastructure is stable
-- [ ] Services run continuously
-- [ ] Secrets are stored in and retrieved from OpenBao
-- [ ] HTTPS is operational via Caddy
-- [ ] Metrics appear in Grafana
-- [ ] Logs appear in Loki
-- [ ] GitHub Actions deploys the portfolio website automatically via SSH over Tailscale
-- [ ] Portfolio website is reachable, functional, and using PostgreSQL
-- [ ] Documentation is finished (`docs/design.md` + runbooks + diagrams)
-- [ ] Architecture diagrams are completed
-
-At that point the project shifts from “building infrastructure” to “demonstrating engineering capability.”
+- [ ] Core services run reliably as Docker containers on the Debian host OS
+- [ ] NetBird provides private access to the host and authorized project subnet
+- [ ] Local LAN access is limited to the DNS exception
+- [ ] Proxmox project environments can be quickly provisioned and recovered
+- [ ] Cloudflare Tunnel publishes the portfolio through Caddy without public
+      host ports
+- [ ] Portfolio is functional, uses PostgreSQL, and retrieves secrets from
+      OpenBao
+- [ ] Metrics and logs appear in Grafana/Loki
+- [ ] CI/CD deploys over NetBird
+- [ ] Core service data and Proxmox project environments have documented
+      backups and restore procedures
+- [ ] Design docs, diagrams, and runbooks match the implementation
 
 ---
 
 ## Related Documents
 
-- `docs/design.md` — Technical Design Document (source of truth for architecture decisions)
+- `docs/design.md` — Technical Design Document
 - `docs/architecture/` — Mermaid diagrams
-- `docs/runbooks/` — Operational procedures (to be populated)
+- `docs/runbooks/` — Operational procedures

@@ -1,13 +1,14 @@
 # Runbook: Restore Backup
 
 **ID:** RB-003  
-**Last Updated:** 2026-11-09  
-**Owner:** Project owner  
+**Last Updated:** 2026-11-11
+**Owner:** Platform operator
 **Last Tested:** Not yet tested
 
 ## Purpose
 
-Restore data or system state from a known-good backup. Covers both Proxmox VM-level backups and application-level (PostgreSQL) logical backups.
+Restore host Docker service data, Proxmox project environments, or PostgreSQL
+logical backups from a known-good backup.
 
 ## When to Use
 
@@ -19,38 +20,55 @@ Restore data or system state from a known-good backup. Covers both Proxmox VM-le
 ## Prerequisites
 
 - Access to the Proxmox host (or backup storage location)
-- Access to the `apps` VM for database restores
+- Access to the Debian host and Proxmox management
 - Knowledge of the backup schedule and retention policy
 - Sufficient disk space for the restore operation
-- Tailscale connectivity
+- NetBird connectivity or local-console access
 
 ## Procedure
 
-### A. Restore an entire VM from Proxmox backup
+### A. Create a PostgreSQL logical backup
 
-1. Identify the correct backup (date, VMID, storage).
-2. In Proxmox UI or CLI, select the backup and choose “Restore”.
-3. Decide whether to overwrite the existing VM or restore to a new VMID.
-4. Start the restored VM.
-5. Verify Tailscale connectivity and service health.
-6. Update any internal DNS or configuration that referenced the old VM if a new VMID was used.
+1. Choose the database and the configured protected backup destination.
+2. From the Debian host, run `pg_dump` in the PostgreSQL Docker container for
+   each database and write the dumps to the configured backup destination.
+3. Confirm the dump was created and is included in the backup retention policy.
 
-### B. Restore PostgreSQL from logical backup (pg_dump)
+### B. Restore a Proxmox project environment
 
-1. Locate the desired dump file (local storage, object storage, or backup volume).
-2. Connect to the `apps` VM.
-3. Stop or quiesce the application that uses the database (to avoid writes during restore).
-4. Restore the dump:
+1. Identify the correct Proxmox guest backup (date, VMID/CTID, storage).
+2. In Proxmox UI or CLI, restore the VM or LXC. Prefer a new ID if the existing
+   environment may be needed for investigation.
+3. Confirm network attachment to the project subnet and start the guest.
+4. Verify the workload and its connectivity to host core services.
+5. Update AdGuard DNS or Caddy upstream configuration if the guest address
+   changed.
+
+### C. Restore host Docker core service data
+
+1. Locate the protected backup of the service's configuration and persistent
+   data.
+2. Stop the affected Docker service on the Debian host.
+3. Restore its configuration/data to the documented host paths and check
+   ownership and permissions.
+4. Recreate/start the service using its Docker Compose configuration.
+5. Verify the service and its dependent workloads.
+
+### D. Restore PostgreSQL from logical backup (pg_dump)
+
+1. Locate the desired dump file (protected backup storage).
+2. Stop or quiesce the application that uses the database.
+3. Restore into the PostgreSQL Docker service:
    ```bash
    # Example – adjust for actual tooling
    pg_restore --clean --if-exists -d <database> <backup-file>
    # or
    psql -d <database> < backup.sql
    ```
-5. Restart the application.
-6. Verify data integrity and application functionality.
+4. Restart the dependent application service in its project environment.
+5. Verify data integrity and application functionality.
 
-### C. Restore OpenBao data (if applicable)
+### E. Restore OpenBao data (if applicable)
 
 1. Follow OpenBao’s documented recovery procedure for the storage backend in use.
 2. Have unseal / recovery keys available offline.
@@ -72,7 +90,8 @@ Restore data or system state from a known-good backup. Covers both Proxmox VM-le
 
 ## Related
 
-- Proxmox backup schedule (document concrete storage and retention here once defined)
-- PostgreSQL backup scripts / cron jobs
-- RB-004 Recover VM
+- Proxmox project-environment backup schedule
+- Host Docker configuration/volume backup procedure
+- PostgreSQL `pg_dump` scripts / cron jobs
+- [RB-004 Recover Project Environment](04-recover-project-environment.md)
 - `docs/design.md` §8 Backup and Recovery

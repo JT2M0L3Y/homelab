@@ -1,13 +1,13 @@
 # Runbook: Portfolio Cut-over / Rollback
 
 **ID:** RB-006  
-**Last Updated:** 2026-11-09  
-**Owner:** Project owner  
+**Last Updated:** 2026-11-11
+**Owner:** Platform operator
 **Last Tested:** Not yet tested
 
 ## Purpose
 
-Safely move public traffic for [jonathansmoley.com](https://jonathansmoley.com) from the current Cloudflare Worker (static) to the self-hosted dynamic version running on the platform, and reverse the change if necessary.
+Safely move public traffic for the portfolio domain from the current Cloudflare Worker (static) to the self-hosted dynamic version running on the platform, and reverse the change if necessary.
 
 ## When to Use
 
@@ -17,7 +17,8 @@ Safely move public traffic for [jonathansmoley.com](https://jonathansmoley.com) 
 
 ## Prerequisites
 
-- Self-hosted portfolio site is deployed, healthy, and serving correct content over HTTPS via Caddy
+- Self-hosted portfolio site is deployed as a Docker workload in its Proxmox
+  project environment, healthy, and routed through host Caddy
 - Database migrations (if any) have been applied and verified
 - Cloudflare DNS access
 - Ability to update Caddy and OpenBao if needed
@@ -29,18 +30,23 @@ Safely move public traffic for [jonathansmoley.com](https://jonathansmoley.com) 
 ### A. Cut-over (Cloudflare Worker → Self-hosted)
 
 1. **Final pre-flight checks**
-   - [ ] Self-hosted site responds correctly on its internal and temporary public URL (if any)
+   - [ ] Self-hosted site responds correctly through host Caddy and the
+         Cloudflare Tunnel
    - [ ] TLS certificate is valid
    - [ ] Database connectivity and critical pages work
    - [ ] Logs and metrics are flowing
    - [ ] Recent backup of PostgreSQL exists
 
 2. **Lower DNS TTL** (optional but recommended)
-   - In Cloudflare, temporarily lower the TTL for the relevant records so the cut-over propagates faster.
+   - No DNS origin cut-over is required for tunnel-based ingress. If Cloudflare
+     DNS records or Worker routes need to change, temporarily lower their TTL
+     where applicable.
 
 3. **Update DNS**
-   - Point `jonathansmoley.com` (and `www` if used) to the public IP or Cloudflare Tunnel / origin that reaches Caddy on the `apps` VM.
-   - Or, if using Cloudflare proxy, update the origin to the self-hosted endpoint.
+   - Configure Cloudflare Tunnel to forward `<PORTFOLIO_DOMAIN>` (and its
+     `www` hostname if used) to host Caddy.
+   - Ensure Caddy proxies to the portfolio project environment. Do not expose
+     public ports on the host.
 
 4. **Monitor**
    - Watch Grafana, Loki, and real-user checks for errors, elevated latency, or 5xx responses.
@@ -64,7 +70,7 @@ Safely move public traffic for [jonathansmoley.com](https://jonathansmoley.com) 
 
 ## Verification (after cut-over)
 
-- [ ] `https://jonathansmoley.com` resolves and serves the self-hosted version
+- [ ] `https://<PORTFOLIO_DOMAIN>` resolves and serves the self-hosted version
 - [ ] Certificate is valid and trusted
 - [ ] Key dynamic features (DB-backed pages, any APIs) function
 - [ ] No spike in 5xx or unusual error rates in Loki/Grafana
@@ -82,4 +88,4 @@ Safely move public traffic for [jonathansmoley.com](https://jonathansmoley.com) 
 - Cloudflare DNS dashboard
 - Caddy configuration for the portfolio site
 - `docs/design.md` §1 (Primary Application) and §6
-- Current Cloudflare Worker project (keep link or notes here once finalized)
+- Current Cloudflare Worker project

@@ -5,22 +5,21 @@
 ```mermaid
 flowchart LR
     subgraph Sources["Metric Sources"]
-        NodePC[platform-core<br/>node_exporter]
-        NodeApps[apps<br/>node_exporter]
-        NodeDev[dev<br/>node_exporter]
-        AppMetrics[Portfolio Site<br/>/metrics]
-        CaddyMetrics[Caddy metrics]
+        HostMetrics[Debian host metrics]
+        DockerMetrics[Core Docker service metrics]
+        GuestMetrics[Proxmox project VM metrics]
+        AppMetrics[Portfolio application metrics]
+        CaddyMetrics[Host Caddy metrics]
     end
 
-    Prom[Prometheus<br/>platform-core]
-    Grafana[Grafana]
+    Prom[Host Docker<br/>Prometheus]
+    Grafana[Host Docker<br/>Grafana]
 
-    NodePC --> Prom
-    NodeApps --> Prom
-    NodeDev --> Prom
+    HostMetrics --> Prom
+    DockerMetrics --> Prom
+    GuestMetrics --> Prom
     AppMetrics --> Prom
     CaddyMetrics --> Prom
-
     Prom --> Grafana
 ```
 
@@ -28,23 +27,20 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    subgraph LogSources["Log Sources"]
-        AppLogs[Portfolio Website]
-        CaddyLogs[Caddy]
-        SystemLogs[systemd / journal]
-        OpenBaoLogs[OpenBao]
+    subgraph Sources["Log Sources"]
+        HostLogs[Debian host / systemd]
+        CoreLogs[Core Docker services]
+        ProjectLogs[Project VM / Docker workloads]
     end
 
-    Promtail[Promtail or<br/>equivalent agents]
-    Loki[Loki<br/>platform-core]
-    Grafana[Grafana]
+    Agent[Log shipping agent]
+    Loki[Host Docker<br/>Loki]
+    Grafana[Host Docker<br/>Grafana]
 
-    AppLogs --> Promtail
-    CaddyLogs --> Promtail
-    SystemLogs --> Promtail
-    OpenBaoLogs --> Promtail
-
-    Promtail --> Loki
+    HostLogs --> Agent
+    CoreLogs --> Agent
+    ProjectLogs --> Agent
+    Agent --> Loki
     Loki --> Grafana
 ```
 
@@ -53,18 +49,16 @@ flowchart LR
 ```mermaid
 flowchart TB
     subgraph Collect["Collection"]
-        Exporters[Node + App Exporters]
-        Agents[Log Agents]
+        Exporters[Host / Docker / project / app metrics]
+        Agents[Host and project log agents]
     end
 
-    subgraph Store["Storage"]
+    subgraph Store["Host Docker Services"]
         Prom[Prometheus]
         Loki[Loki]
     end
 
-    subgraph Present["Presentation"]
-        Grafana[Grafana Dashboards]
-    end
+    Grafana[Grafana]
 
     Exporters --> Prom
     Agents --> Loki
@@ -74,12 +68,15 @@ flowchart TB
 
 ## Required Dashboards (MVP)
 
-1. **Infrastructure Health** – host + all VMs (CPU, memory, disk, network)
-2. **VM / Node Detail** – per-VM drill-down
-3. **Application** – request rate, latency, errors, saturation for the portfolio site
+1. **Infrastructure Health** – Debian host, Docker core services, and Proxmox
+   project environments
+2. **Project Environment Detail** – per-VM and workload drill-down
+3. **Application** – portfolio request rate, latency, errors, and saturation
 
 ## Notes
 
-- All observability components live on `platform-core` to keep the data plane separate from the control/observability plane where practical.
-- Grafana is the single pane of glass for both metrics and logs in the MVP.
-- The portfolio site should expose Prometheus metrics and structured logs from the first dynamic version.
+- Prometheus, Grafana, and Loki run as Docker containers on the Debian host OS.
+- Collect metrics and logs from the host, core Docker services, and project
+  workloads.
+- Grafana is the single pane of glass for metrics and logs.
+- Avoid collecting secrets or sensitive payloads in logs.

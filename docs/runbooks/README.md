@@ -45,7 +45,7 @@ How to undo or recover if something goes wrong.
 | RB-001 | Deploy Service | [01-deploy-service.md](01-deploy-service.md) |
 | RB-002 | Rotate Secrets | [02-rotate-secrets.md](02-rotate-secrets.md) |
 | RB-003 | Restore Backup | [03-restore-backup.md](03-restore-backup.md) |
-| RB-004 | Recover VM | [04-recover-vm.md](04-recover-vm.md) |
+| RB-004 | Recover Project Environment | [04-recover-project-environment.md](04-recover-project-environment.md) |
 | RB-005 | Add New Application | [05-add-new-application.md](05-add-new-application.md) |
 | RB-006 | Portfolio Cut-over / Rollback | [06-portfolio-cutover-rollback.md](06-portfolio-cutover-rollback.md) |
 

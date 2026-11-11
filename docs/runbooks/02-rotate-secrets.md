@@ -1,8 +1,8 @@
 # Runbook: Rotate Secrets
 
 **ID:** RB-002  
-**Last Updated:** 2026-11-09  
-**Owner:** Project owner  
+**Last Updated:** 2026-11-11
+**Owner:** Platform operator
 **Last Tested:** Not yet tested
 
 ## Purpose
@@ -18,7 +18,7 @@ Safely rotate secrets stored in OpenBao and ensure dependent services pick up th
 
 ## Prerequisites
 
-- Access to OpenBao (UI or CLI) via Tailscale
+- Access to OpenBao (UI or CLI) through NetBird or an approved internal route
 - Appropriate OpenBao policy / token to read and write the target secret paths
 - Ability to restart or signal the dependent services (or trigger a redeploy)
 - Knowledge of which services consume the secret

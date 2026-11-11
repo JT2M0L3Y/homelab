@@ -3,55 +3,62 @@
 ```mermaid
 flowchart TB
     Internet((Internet))
-    CF[Cloudflare DNS]
-    TS[Tailscale Overlay Network]
+    Cloudflare[Cloudflare]
+    NetBirdMgmt[NetBird hosted management]
+    Remote[Authorized remote peers]
+    GH[GitHub]
+    GHA[GitHub Actions]
 
-    subgraph Host["Proxmox Host"]
-        direction TB
-
-        subgraph Core["VM: platform-core"]
+    subgraph Host["Debian / Proxmox Host · LAN_HOST_IP/LAN_PREFIX"]
+        Peer[NetBird peer / subnet router]
+        subgraph Core["Host-level Docker services"]
+            AdGuard[AdGuard Home]
             OpenBao[OpenBao]
+            Caddy[Caddy]
+            PostgreSQL[(PostgreSQL)]
+            Prometheus[Prometheus]
             Grafana[Grafana]
-            Prom[Prometheus]
             Loki[Loki]
-            AdGuard[AdGuard Home<br/>Internal DNS]
+            Tunnel[Cloudflare Tunnel]
         end
-
-        subgraph Apps["VM: apps"]
-            Caddy[Caddy<br/>Reverse Proxy + HTTPS]
-            PG[(PostgreSQL)]
-            App[Portfolio Website<br/>jonathansmoley.com]
-        end
-
-        subgraph Dev["VM: dev"]
-            Workstation[Developer Workstation]
+        Proxmox[Proxmox]
+        subgraph Projects["vmbr1 · project environments"]
+            Portfolio[Portfolio Docker workload]
+            Dev[Development environments]
+            Test[Short-lived test environments]
         end
     end
 
-    GH[GitHub Repository]
-    GHA[GitHub Actions]
-
-    Internet --> CF
-    CF --> TS
-    TS --> Host
-
+    NetBirdMgmt -. peer coordination .-> Peer
+    NetBirdMgmt -. peer coordination .-> Remote
+    Remote -->|Authorized overlay route| Peer
+    Peer --> Projects
     GH --> GHA
-    GHA -->|Deploy via Tailscale SSH| Apps
-
-    Caddy --> App
-    App --> PG
-    App -.->|Fetch secrets| OpenBao
-    Prom -->|Scrape| Core
-    Prom -->|Scrape| Apps
-    Loki -->|Ingest logs| Core
-    Loki -->|Ingest logs| Apps
+    GHA -->|NetBird / Proxmox API / SSH| Host
+    Internet --> Cloudflare
+    Cloudflare -->|Tunnel ingress| Tunnel
+    Tunnel --> Caddy
+    Caddy --> Portfolio
+    Portfolio --> PostgreSQL
+    Portfolio -.->|Fetch secrets| OpenBao
+    Prometheus --> Core
+    Prometheus --> Projects
+    Prometheus --> Grafana
+    Loki --> Grafana
 ```
 
 ## Notes
 
-- `platform-core` hosts the control-plane and observability stack (OpenBao, Grafana, Prometheus, Loki, AdGuard Home).
-- `apps` hosts the reverse proxy, database, and the portfolio website.
-- `dev` is a full developer workstation joined to the same Tailscale network.
-- All management traffic (SSH, OpenBao UI, Grafana, etc.) travels over Tailscale.
-- Public HTTPS traffic for the portfolio site is terminated by Caddy after DNS resolution via Cloudflare.
-- The portfolio site is the primary workload that proves the platform; it will evolve from the current static Cloudflare Worker into a dynamic application backed by PostgreSQL and additional APIs.
+- Core services run as Docker containers on the Debian host OS, separate from
+  Proxmox-managed guests.
+- NetBird uses hosted management. The Debian host runs the peer and advertises
+  the authorized project subnet; remote peers access only what policy permits.
+- Proxmox is the quick-provisioning environment for project, development, and
+  test workloads. The portfolio is a project workload.
+- Use Proxmox VMs for Docker-based project workloads; do not nest Docker inside
+  an LXC.
+- AdGuard Home provides internal DNS. Caddy handles internal routing and
+  receives public requests from the host's Cloudflare Tunnel.
+- The host firewall blocks local-LAN-initiated access to platform services and
+  the project subnet, except DNS to AdGuard Home on TCP/UDP 53.
+- No public ports are opened on the host.
